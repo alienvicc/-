@@ -1,0 +1,340 @@
+<meta name='viewport' content='width=device-width, initial-scale=1'/><!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>استخراج‌کننده ضد هنگ موبایل (ZIP فوری + MP3)</title>
+<style>
+  body { font-family: Tahoma, sans-serif; background: #090d16; color: #f8fafc; text-align: center; padding: 12px; margin: 0; }
+  .box { background: #1e293b; padding: 18px; border-radius: 16px; max-width: 480px; margin: 10px auto; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; }
+  h2 { color: #38bdf8; margin-top: 0; font-size: 17px; line-height: 1.5; }
+  .upload-box { border: 2px dashed #3b82f6; background: #0f172a; padding: 15px; border-radius: 12px; margin: 12px 0; }
+  input[type="file"] { color: #cbd5e1; font-size: 13px; width: 100%; }
+  select { width: 100%; padding: 11px; border-radius: 8px; background: #0f172a; color: #fff; border: 1px solid #475569; font-family: Tahoma; font-size: 12.5px; margin-bottom: 10px; }
+  button { width: 100%; padding: 14px; border: none; border-radius: 10px; font-family: Tahoma; font-size: 13.5px; font-weight: bold; cursor: pointer; margin-top: 8px; color: white; transition: 0.15s; }
+  .btn-zip { background: #2563eb; box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
+  .btn-mp3 { background: #10b981; box-shadow: 0 4px 12px rgba(16,185,129,0.3); }
+  .btn-reset { background: #475569; font-size: 12px; padding: 10px; margin-top: 12px; }
+  button:active { transform: scale(0.98); }
+  button:disabled { background: #334155 !important; color: #94a3b8 !important; box-shadow: none; cursor: not-allowed; }
+  #status { margin-top: 14px; background: #0f172a; padding: 12px; border-radius: 8px; color: #fbbf24; font-size: 12.5px; line-height: 1.8; white-space: pre-line; text-align: right; border: 1px solid #1e293b; }
+</style>
+</head>
+<body>
+<div class="box">
+  <h2>📱 استخراج فوری ویس پاورپوینت (نسخه ضد هنگ موبایل)</h2>
+  <p style="color:#94a3b8; font-size:11.5px; margin-top:-5px;">باز شدن آنی صفحه • دانلود ۱ ثانیه‌ای ZIP • تبدیل WMA/M4A به MP3</p>
+
+  <div class="upload-box">
+    <div style="color:#60a5fa; font-weight:bold; margin-bottom:8px; font-size:13px;">📂 فایل پاورپوینت (.pptx) یا ویس‌ها را انتخاب کنید:</div>
+    <input type="file" id="fileInput" multiple />
+  </div>
+
+  <!-- دکمه اول: دانلود فوری زیپ در ۱ ثانیه بدون هیچ پیش‌نیازی -->
+  <button id="zipBtn" class="btn-zip" disabled>📦 ۱. دانلود فوری فایل ZIP همه ویس‌ها (در ۱ ثانیه)</button>
+
+  <hr style="border: 0; border-top: 1px solid #334155; margin: 16px 0;">
+
+  <select id="bitrate">
+    <option value="24k" selected>⚡ فوق کم‌حجم: ۱۱ مگابایت در ساعت (24kbps MP3 - واضح)</option>
+    <option value="32k">🎵 استاندارد: ۱۴ مگابایت در ساعت (32kbps MP3 - شفاف)</option>
+  </select>
+
+  <!-- دکمه دوم: ادغام و تبدیل به MP3 -->
+  <button id="mp3Btn" class="btn-mp3" disabled>🚀 ۲. ادغام همه (حتی WMA) به یک فایل MP3 کم‌حجم</button>
+
+  <button id="resetBtn" class="btn-reset" onclick="resetMemory()">🔄 پاک‌سازی حافظه برای فایل پاورپوینت بعدی</button>
+
+  <div id="status">منتظر انتخاب فایل پاورپوینت...</div>
+</div>
+
+<script>
+let extractedAudios = [];
+let cachedZipBlob = null;
+let baseName = "Lecture";
+
+const statusEl = document.getElementById('status');
+const mp3Btn = document.getElementById('mp3Btn');
+const zipBtn = document.getElementById('zipBtn');
+const fileInput = document.getElementById('fileInput');
+
+function isAudio(name) {
+  return /\.(wma|m4a|mp3|wav|aac|ogg|opus|mp4|3gp|amr|flac)$/i.test(name);
+}
+
+// تابع دانلود سازگار با تمام مرورگرهای موبایل به همراه آزادسازی خودکار رم
+function triggerMobileDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.style.display = 'none';
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 15000);
+}
+
+// پاک‌سازی کامل حافظه بدون نیاز به بستن صفحه
+function resetMemory() {
+  extractedAudios = [];
+  cachedZipBlob = null;
+  fileInput.value = "";
+  zipBtn.disabled = true;
+  mp3Btn.disabled = true;
+  statusEl.innerText = "🧹 حافظه رم کاملاً پاک شد! آماده دریافت فایل جدید.";
+}
+
+// ۱. استخراج‌کننده باینری فوق‌سریع پاورپوینت (۱۰۰٪ آفلاین و بدون کتابخانه)
+async function unpackPptxFast(file) {
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  const view = new DataView(buf);
+  let eocd = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
+    if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd === -1) throw new Error("فایل پاورپوینت (.pptx) معتبر نیست.");
+
+  const cdCount = view.getUint16(eocd + 10, true);
+  let ptr = view.getUint32(eocd + 16, true);
+  const dec = new TextDecoder();
+  const entries = new Map();
+
+  for (let i = 0; i < cdCount; i++) {
+    if (view.getUint32(ptr, true) !== 0x02014b50) break;
+    const compMethod = view.getUint16(ptr + 10, true);
+    const compSize = view.getUint32(ptr + 20, true);
+    const uncompSize = view.getUint32(ptr + 24, true);
+    const nameLen = view.getUint16(ptr + 28, true);
+    const extraLen = view.getUint16(ptr + 30, true);
+    const commentLen = view.getUint16(ptr + 32, true);
+    const lh = view.getUint32(ptr + 42, true);
+    const name = dec.decode(bytes.subarray(ptr + 46, ptr + 46 + nameLen));
+    entries.set(name, { compMethod, compSize, uncompSize, lh, name });
+    ptr += 46 + nameLen + extraLen + commentLen;
+  }
+
+  async function getBytes(entry) {
+    const lNameLen = view.getUint16(entry.lh + 26, true);
+    const lExtraLen = view.getUint16(entry.lh + 28, true);
+    const start = entry.lh + 30 + lNameLen + lExtraLen;
+    const raw = bytes.subarray(start, start + entry.compSize);
+    if (entry.compMethod === 0) return new Uint8Array(raw);
+    if (entry.compMethod === 8) {
+      const ds = new DecompressionStream('deflate-raw');
+      const w = ds.writable.getWriter();
+      w.write(raw); w.close();
+      return new Uint8Array(await new Response(ds.readable).arrayBuffer());
+    }
+    return null;
+  }
+
+  const slideRels = [];
+  for (const [path, entry] of entries.entries()) {
+    const m = path.match(/^ppt\/slides\/_rels\/slide(\d+)\.xml\.rels$/i);
+    if (m) slideRels.push({ num: parseInt(m[1]), entry });
+  }
+  slideRels.sort((a, b) => a.num - b.num);
+
+  const ordered = [];
+  const seen = new Set();
+  for (const rel of slideRels) {
+    try {
+      const xml = dec.decode(await getBytes(rel.entry));
+      const reg = /Target="[^"]*?media\/([^"]+)"/gi;
+      let m;
+      while ((m = reg.exec(xml)) !== null) {
+        const p = `ppt/media/${m[1]}`;
+        if (entries.has(p) && !seen.has(p) && isAudio(p)) {
+          seen.add(p);
+          ordered.push({ path: p, slide: rel.num });
+        }
+      }
+    } catch (e) {}
+  }
+
+  const others = [];
+  for (const [path, entry] of entries.entries()) {
+    if (!seen.has(path) && isAudio(path) && entry.uncompSize > 100) {
+      const nums = path.match(/(\d+)/g);
+      others.push({ path, slide: nums ? parseInt(nums[nums.length - 1]) : 999 });
+    }
+  }
+  others.sort((a, b) => a.slide - b.slide);
+
+  const queue = [...ordered, ...others];
+  const out = [];
+  for (let i = 0; i < queue.length; i++) {
+    const data = await getBytes(entries.get(queue[i].path));
+    if (data && data.byteLength > 100) {
+      const ext = queue[i].path.split('.').pop().toLowerCase();
+      out.push({
+        name: `Slide_${String(queue[i].slide).padStart(3, '0')}_${String(i + 1).padStart(2, '0')}.${ext}`,
+        ext,
+        data
+      });
+    }
+  }
+  return out;
+}
+
+// ۲. ساخت فوری فایل ZIP در حافظه به محض انتخاب پاورپوینت
+function buildFastZipBlob(filesList) {
+  const enc = new TextEncoder();
+  let dataLen = 0, cdLen = 0;
+  const items = filesList.map(f => {
+    const nb = enc.encode(f.name);
+    const crc = crc32(f.data);
+    dataLen += 30 + nb.length + f.data.length;
+    cdLen += 46 + nb.length;
+    return { nb, data: f.data, crc };
+  });
+  const buf = new ArrayBuffer(dataLen + cdLen + 22);
+  const v = new DataView(buf), b = new Uint8Array(buf);
+  let off = 0, cdOff = dataLen;
+  for (const p of items) {
+    v.setUint32(off, 0x04034b50, true); v.setUint16(off+4, 20, true);
+    v.setUint32(off+14, p.crc, true); v.setUint32(off+18, p.data.length, true);
+    v.setUint32(off+22, p.data.length, true); v.setUint16(off+26, p.nb.length, true);
+    b.set(p.nb, off+30); b.set(p.data, off+30+p.nb.length);
+    v.setUint32(cdOff, 0x02014b50, true); v.setUint16(cdOff+4, 20, true); v.setUint16(cdOff+6, 20, true);
+    v.setUint32(cdOff+16, p.crc, true); v.setUint32(cdOff+20, p.data.length, true);
+    v.setUint32(cdOff+24, p.data.length, true); v.setUint16(cdOff+28, p.nb.length, true);
+    v.setUint32(cdOff+42, off, true); b.set(p.nb, cdOff+46);
+    off += 30 + p.nb.length + p.data.length; cdOff += 46 + p.nb.length;
+  }
+  v.setUint32(cdOff, 0x06054b50, true); v.setUint16(cdOff+8, items.length, true);
+  v.setUint16(cdOff+10, items.length, true); v.setUint32(cdOff+12, cdLen, true);
+  v.setUint32(cdOff+16, dataLen, true);
+  return new Blob([buf], { type: 'application/zip' });
+}
+
+fileInput.addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
+  statusEl.innerText = "⚡ در حال استخراج آنی ویس‌ها و آماده‌سازی فایل ZIP...";
+  mp3Btn.disabled = true; zipBtn.disabled = true;
+  extractedAudios = [];
+  cachedZipBlob = null;
+
+  try {
+    files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    baseName = files[0].name.replace(/\.[^/.]+$/, "");
+
+    for (const f of files) {
+      if (/\.(pptx|ppsx|pptm|zip)$/i.test(f.name)) {
+        const items = await unpackPptxFast(f);
+        extractedAudios.push(...items);
+      } else if (isAudio(f.name)) {
+        const ext = f.name.split('.').pop().toLowerCase();
+        extractedAudios.push({ name: f.name, ext, data: new Uint8Array(await f.arrayBuffer()) });
+      }
+    }
+
+    if (!extractedAudios.length) {
+      statusEl.innerText = "❌ هیچ فایل صوتی در این فایل پیدا نشد!";
+      return;
+    }
+
+    // پیش‌ساخت فایل ZIP در ۰.۲ ثانیه تا با زدن دکمه آبی در لحظه دانلود شود
+    cachedZipBlob = buildFastZipBlob(extractedAudios);
+
+    const totalMB = (cachedZipBlob.size / (1024 * 1024)).toFixed(1);
+    const formats = [...new Set(extractedAudios.map(a => a.ext.toUpperCase()))].join(', ');
+    statusEl.innerText = `✅ تعداد ${extractedAudios.length} ویس استخراج شد!\nفرمت‌ها: ${formats} | حجم کل ZIP: ${totalMB} مگابایت.\n🔹 برای دریافت آنی ZIP دکمه آبی، و برای ادغام به MP3 دکمه سبز را بزنید.`;
+    zipBtn.disabled = false;
+    mp3Btn.disabled = false;
+  } catch (err) {
+    statusEl.innerText = "❌ خطا: " + err.message;
+  }
+});
+
+// دانلود آنی فایل ZIP (بدون هیچ تاخیری چون از قبل ساخته شده است)
+zipBtn.addEventListener('click', () => {
+  if (!cachedZipBlob) return;
+  triggerMobileDownload(cachedZipBlob, `${baseName}_Voices.zip`);
+  statusEl.innerText = "🎉 دانلود فایل ZIP شروع شد! (می‌توانید دکمه سبز را هم برای دریافت فایل MP3 یکپارچه بزنید).";
+});
+
+// بارگذاری تنبل (Lazy Load) موتور FFmpeg فقط در صورت کلیک روی دکمه MP3
+function loadFFmpegScriptOnce() {
+  return new Promise((resolve, reject) => {
+    if (window.FFmpeg) return resolve();
+    const s = document.createElement('script');
+    s.src = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js";
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("خطا در اتصال به اینترنت برای بارگذاری اولیه موتور MP3."));
+    document.head.appendChild(s);
+  });
+}
+
+mp3Btn.addEventListener('click', async () => {
+  if (!extractedAudios.length) return;
+  mp3Btn.disabled = true;
+  const t0 = performance.now();
+  const bitrate = document.getElementById('bitrate').value;
+
+  let ffmpegInstance = null;
+  try {
+    statusEl.innerText = "⏳ ۱/۳: در حال آماده‌سازی موتور مبدل WMA/MP3...";
+    await loadFFmpegScriptOnce();
+
+    const { createFFmpeg } = FFmpeg;
+    ffmpegInstance = createFFmpeg({
+      corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js',
+      mainName: 'main',
+      log: false
+    });
+    await ffmpegInstance.load();
+
+    statusEl.innerText = `⚡ ۲/۳: در حال چسباندن و فشرده‌سازی ${extractedAudios.length} ویس به MP3 کم‌حجم...`;
+    let concatList = "";
+    for (let i = 0; i < extractedAudios.length; i++) {
+      const item = extractedAudios[i];
+      const fname = `in_${i}.${item.ext}`;
+      ffmpegInstance.FS('writeFile', fname, item.data);
+      concatList += `file '${fname}'\n`;
+    }
+    ffmpegInstance.FS('writeFile', 'list.txt', new TextEncoder().encode(concatList));
+
+    await ffmpegInstance.run(
+      '-f', 'concat', '-safe', '0', '-i', 'list.txt',
+      '-vn', '-ac', '1', '-ar', '16000', '-b:a', bitrate,
+      'out.mp3'
+    );
+
+    statusEl.innerText = "⚡ ۳/۳: در حال ساخت فایل دانلود و تخلیه رم گوشی...";
+    const mp3Data = ffmpegInstance.FS('readFile', 'out.mp3');
+    const mp3Blob = new Blob([new Uint8Array(mp3Data)], { type: 'audio/mp3' });
+    const sizeMB = (mp3Blob.size / (1024 * 1024)).toFixed(1);
+    const sec = ((performance.now() - t0) / 1000).toFixed(1);
+
+    // بستن کامل موتور برای جلوگیری از هنگ کردن صفحه در دفعات بعدی
+    try { ffmpegInstance.exit(); } catch (e) {}
+    ffmpegInstance = null;
+
+    triggerMobileDownload(mp3Blob, `${baseName}_Merged.mp3`);
+    statusEl.innerText = `🎉 تمام شد! (${sec} ثانیه)\nفایل MP3 یکپارچه با حجم فقط ${sizeMB} مگابایت دانلود شد و حافظه رم گوشی آزاد گردید.`;
+  } catch (err) {
+    if (ffmpegInstance) { try { ffmpegInstance.exit(); } catch(e){} }
+    statusEl.innerText = "❌ خطا در تبدیل: " + err.message;
+  }
+  mp3Btn.disabled = false;
+});
+
+function crc32(buf) {
+  let c = -1;
+  for (let i = 0; i < buf.length; i++) c = (c >>> 8) ^ crcTable[(c ^ buf[i]) & 0xFF];
+  return (c ^ -1) >>> 0;
+}
+const crcTable = new Uint32Array(256).map((_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+  return c >>> 0;
+});
+</script>
+</body>
+</html>
